@@ -1,7 +1,6 @@
 import type { LoaderFunction, MetaFunction } from "@remix-run/node";
-import { redirect } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useSearchParams } from "@remix-run/react";
+import { useLoaderData } from "@remix-run/react";
 import { startCase } from "lodash";
 import { getSession } from "~/auth.server";
 
@@ -14,7 +13,6 @@ import { db } from "~/utils/db.server";
 import { MODELS_LIMIT } from "~/utils/constants";
 import ModelList from "~/components/ModelList";
 import { getSortFilter } from "~/utils/loader";
-import EmptyFeed from "~/components/EmptyFeed";
 
 export const meta: MetaFunction<LoaderData> = ({ data, location }) => {
   const d = data as LoaderData;
@@ -67,24 +65,18 @@ export const loader: LoaderFunction = async ({ request }) => {
   const user = session?.user;
   const url = new URL(request.url);
 
-  if (!user) {
-    return redirect("/all");
-  }
-
   const profile = await getProfileWithSocials(session);
 
   const { offset, sortDirection, page, categoryId, categories } = await getSortFilter(url);
 
-  const countsReq = db.counts.findMany();
+  const countsReq = await db.counts.findMany();
 
   const modelsReq = getModels({
     limit: MODELS_LIMIT,
     next: offset,
     categoryId,
-    sortBy: "createdAt",
+    sortBy: "popular",
     sortDirection,
-    user,
-    following: true,
   });
 
   const [counts, models] = await Promise.all([countsReq, modelsReq]);
@@ -102,15 +94,8 @@ export const loader: LoaderFunction = async ({ request }) => {
 
 export default function Index() {
   const data = useLoaderData<LoaderData>();
-  const [searchParams] = useSearchParams();
 
-  return data.models.length === 0 && !searchParams.get("filter") ? (
-    <EmptyFeed
-      headline="You are not following anyone yet"
-      buttonText="Find interesting users to follow"
-      buttonHref="/popular"
-    />
-  ) : (
+  return (
     <ModelList
       data={data.models}
       categories={data.categories}
@@ -119,7 +104,7 @@ export default function Index() {
       limit={MODELS_LIMIT}
       user={data.user}
       profile={data.profile}
-      emptyMessage="There are no models for this category"
+      hideSortOrder
     />
   );
 }
